@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>College Cutoff Predictor</title>
+    <title>TNEA Cutoff Predictor 2025</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -13,20 +13,22 @@
             padding: 20px;
         }
         .container {
-            max-width: 600px;
+            max-width: 800px;
             margin: 0 auto;
             background: #fff;
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
         }
-        h2 {
+        h2, h3, h4 {
             text-align: center;
             margin-bottom: 20px;
         }
         form {
             display: flex;
             flex-direction: column;
+            max-width: 500px;
+            margin: 0 auto;
         }
         input, select {
             margin: 10px 0;
@@ -41,6 +43,7 @@
             border: none;
             border-radius: 5px;
             cursor: pointer;
+            margin-top: 10px;
         }
         button:hover {
             background-color: #218838;
@@ -48,17 +51,57 @@
         .prediction {
             text-align: center;
             margin-top: 20px;
-            font-size: 1.2em;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .eligible {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .not-eligible {
+            background-color: #f8d7da;
+            color: #721c24;
         }
         .error {
             color: red;
             text-align: center;
+            margin-top: 20px;
+        }
+        .suggestions {
+            margin-top: 30px;
+        }
+        .suggestion-table {
+            background: #fff;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            padding: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .highlight {
+            background-color: #fff3cd;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>College Cutoff Predictor for 2025</h2>
+        <h2>TNEA Cutoff Predictor 2025</h2>
         <form method="POST" action="/predict">
             <label for="college">College Name</label>
             <input type="text" id="college" name="college" required>
@@ -76,28 +119,55 @@
                 <option value="st">ST</option>
                 <option value="sca">SCA</option>
             </select>
-            <br>
+
             <label for="your_cutoff">Your Cutoff</label>
-            <input type="text" id="your_cutoff" name="your_cutoff" required>
-            <br>
+            <input type="number" id="your_cutoff" name="your_cutoff" step="0.01" required>
+
             <button type="submit">Predict Cutoff</button>
         </form>
-        
+
         {% if prediction %}
-        <div class="prediction">
-            <p>Predicted Cutoff: {{ prediction }}</p>
-            {% if eligible %}
-            <p>You are eligible!</p>
+            {% if prediction == "Invalid college" or prediction == "Invalid department" or prediction == "Invalid caste" %}
+                <div class="error">
+                    <p>{{ prediction }}</p>
+                </div>
             {% else %}
-            <p>You are not eligible.</p>
+                <div class="prediction {% if eligible %}eligible{% else %}not-eligible{% endif %}">
+                    <p>Predicted Cutoff: {{ prediction }}</p>
+                    <p>Your Cutoff: {{ your_cutoff }}</p>
+                    <p><strong>{% if eligible %}You are eligible!{% else %}You are not eligible.{% endif %}</strong></p>
+                </div>
+
+                {% if not eligible %}
+                    <div class="suggestions">
+                        <h3>top Suggestions for your Cutoff</h3>
+                        
+                        
+
+                        {% if department_suggestions %}
+                            <div class="suggestion-table">
+                                <h4>Top Colleges for {{ selected_department }}</h4>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>College Name</th>
+                                            <th>Cutoff</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for suggestion in department_suggestions %}
+                                        <tr {% if suggestion.college_name == selected_college %}class="highlight"{% endif %}>
+                                            <td>{{ suggestion.college_name }}</td>
+                                            <td>{{ "%.2f"|format(suggestion[suggestion.keys()|list|last]) }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endif %}
             {% endif %}
-        </div>
-        {% endif %}
-        
-        {% if prediction == "Invalid college" or prediction == "Invalid department" or prediction == "Invalid caste" %}
-        <div class="error">
-            <p>{{ prediction }}</p>
-        </div>
         {% endif %}
     </div>
 </body>
