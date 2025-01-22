@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>College Cutoff Predictor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+        h2 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+        }
+        input, select {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        button {
+            padding: 10px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        .prediction {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 1.2em;
+        }
+        .error {
+            color: red;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>College Cutoff Predictor for 2025</h2>
+        <form method="POST" action="/predict">
+            <label for="college">College Name</label>
+            <input type="text" id="college" name="college" required>
+
+            <label for="department">Department</label>
+            <input type="text" id="department" name="department" required>
+
+            <label for="caste">Caste</label>
+            <select id="caste" name="caste" required>
+                <option value="oc">OC</option>
+                <option value="bc">BC</option>
+                <option value="mbc">MBC</option>
+                <option value="bcm">BCM</option>
+                <option value="sc">SC</option>
+                <option value="st">ST</option>
+                <option value="sca">SCA</option>
+            </select>
+            <br>
+            <label for="your_cutoff">Your Cutoff</label>
+            <input type="text" id="your_cutoff" name="your_cutoff" required>
+            <br>
+            <button type="submit">Predict Cutoff</button>
+        </form>
+        
+        {% if prediction %}
+        <div class="prediction">
+            <p>Predicted Cutoff: {{ prediction }}</p>
+            {% if eligible %}
+            <p>You are eligible!</p>
+            {% else %}
+            <p>You are not eligible.</p>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        {% if prediction == "Invalid college" or prediction == "Invalid department" or prediction == "Invalid caste" %}
+        <div class="error">
+            <p>{{ prediction }}</p>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
