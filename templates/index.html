@@ -2,103 +2,254 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>College Cutoff Predictor</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f4;
-            margin: 0;
-            padding: 20px;
-        }
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-            background: #fff;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-        }
-        h2 {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        form {
-            display: flex;
-            flex-direction: column;
-        }
-        input, select {
-            margin: 10px 0;
-            padding: 10px;
-            border-radius: 5px;
-            border: 1px solid #ccc;
-        }
-        button {
-            padding: 10px;
-            background-color: #28a745;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #218838;
-        }
-        .prediction {
-            text-align: center;
-            margin-top: 20px;
-            font-size: 1.2em;
-        }
-        .error {
-            color: red;
-            text-align: center;
-        }
-    </style>
+    <title>College Cutoff Predictor 2025</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="container">
-        <h2>College Cutoff Predictor for 2025</h2>
-        <form method="POST" action="/predict">
-            <label for="college">College Name</label>
-            <input type="text" id="college" name="college" required>
+        <header>
+            <h1 class="animate-fadeIn">College Cutoff Predictor 2025</h1>
+            <p class="subtitle animate-fadeIn">Predict your chances of admission based on historical data</p>
+        </header>
 
-            <label for="department">Department</label>
-            <input type="text" id="department" name="department" required>
-
-            <label for="caste">Caste</label>
-            <select id="caste" name="caste" required>
-                <option value="oc">OC</option>
-                <option value="bc">BC</option>
-                <option value="mbc">MBC</option>
-                <option value="bcm">BCM</option>
-                <option value="sc">SC</option>
-                <option value="st">ST</option>
-                <option value="sca">SCA</option>
-            </select>
-            <br>
-            <label for="your_cutoff">Your Cutoff</label>
-            <input type="text" id="your_cutoff" name="your_cutoff" required>
-            <br>
-            <button type="submit">Predict Cutoff</button>
-        </form>
+        <div class="card animate-scaleIn">
+            <div class="form-section">
+                <h2>Enter Your Details</h2>
+                <form id="prediction-form" action="/predict" method="POST">
+                    <div class="form-group">
+                        <label for="college">College</label>
+                        <input type="text" id="college" name="college" placeholder="Type college name" list="college-list" required>
+                        <datalist id="college-list">
+                            {% for college in colleges %}
+                            <option value="{{ college }}">
+                            {% endfor %}
+                        </datalist>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="department">Department</label>
+                        <input type="text" id="department" name="department" placeholder="Type department name" list="department-list" required>
+                        <datalist id="department-list">
+                            {% for department in departments %}
+                            <option value="{{ department }}">
+                            {% endfor %}
+                        </datalist>
+                    </div>
+                    
+                    
+                    <div class="form-group">
+                        <label for="caste">Caste Category</label>
+                        <select id="caste" name="caste" required>
+                            <option value="" disabled selected>Select caste category</option>
+                            <option value="oc">OC</option>
+                            <option value="bc">BC</option>
+                            <option value="mbc">MBC</option>
+                            <option value="bcm">BCM</option>
+                            <option value="sc">SC</option>
+                            <option value="st">ST</option>
+                            <option value="sca">SCA</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="cutoff">Your Cutoff Score</label>
+                        <input type="number" id="cutoff" name="your_cutoff" placeholder="Enter your cutoff score" min="77" max="200" required>
+                    </div>
+                    
+                    <button type="submit" class="btn-predict" id="predict-button">
+                        <span class="btn-text">Predict Chances</span>
+                        <span class="btn-loading" style="display: none;">
+                            <span class="spinner"></span>
+                            Predicting...
+                        </span>
+                    </button>
+                </form>
+            </div>
+            
+            <div class="results-section">
+                {% if prediction %}
+                    {% if prediction == "Invalid college" or prediction == "Invalid department" or prediction == "Invalid caste" %}
+                        <div class="error-message">
+                            {{ prediction }}
+                        </div>
+                    {% else %}
+                        <div id="prediction-results">
+                            <h2>Prediction Results</h2>
+                            <div class="prediction-card">
+                                <div class="prediction-row">
+                                    <span>Predicted Cutoff 2025:</span>
+                                    <span class="prediction-value">{{ prediction }}</span>
+                                </div>
+                                <div class="prediction-row">
+                                    <span>Your Cutoff:</span>
+                                    <span class="prediction-value">{{ your_cutoff }}</span>
+                                </div>
+                                <div class="eligibility-status {% if eligible %}eligible{% else %}not-eligible{% endif %}">
+                                    {% if eligible %}
+                                        You are likely eligible for this program!
+                                    {% else %}
+                                        Your cutoff is below the predicted threshold.
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <!-- NEW: Worth Assessment Section -->
+                            {% if worth_assessment %}
+                                <div class="worth-assessment-container">
+                                    <h3>Value Assessment</h3>
+                                    <div class="worth-card {% if worth_assessment.is_worth_it == 'high_value' %}high-value{% elif worth_assessment.is_worth_it == 'good_value' %}good-value{% elif worth_assessment.is_worth_it == 'fair_value' %}fair-value{% else %}low-value{% endif %}">
+                                        <div class="worth-heading">
+                                            {% if worth_assessment.is_worth_it == 'high_value' %}
+                                                <span class="worth-icon">★★★</span> High Value Choice
+                                            {% elif worth_assessment.is_worth_it == 'good_value' %}
+                                                <span class="worth-icon">★★</span> Good Value Choice
+                                            {% elif worth_assessment.is_worth_it == 'fair_value' %}
+                                                <span class="worth-icon">★</span> Fair Value Choice
+                                            {% else %}
+                                                <span class="worth-icon">⚠</span> Consider Other Options
+                                            {% endif %}
+                                        </div>
+                                        <div class="worth-details">
+                                            <div class="worth-row">
+                                                <span>Average cutoff for this college:</span>
+                                                <span>{{ worth_assessment.college_avg_cutoff }}</span>
+                                            </div>
+                                            <div class="worth-row">
+                                                <span>Average cutoff for this department:</span>
+                                                <span>{{ worth_assessment.department_avg_cutoff }}</span>
+                                            </div>
+                                            <div class="worth-explanation">
+                                                {% if worth_assessment.is_worth_it == 'high_value' %}
+                                                    Your cutoff is significantly higher than required, you may qualify for more competitive options.
+                                                {% elif worth_assessment.is_worth_it == 'good_value' %}
+                                                    Your cutoff aligns well with the requirements for this program.
+                                                {% elif worth_assessment.is_worth_it == 'fair_value' %}
+                                                    Your cutoff is close to the threshold - admission may be competitive.
+                                                {% else %}
+                                                    Your cutoff is below the expected threshold - consider exploring other options.
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endif %}
         
-        {% if prediction %}
-        <div class="prediction">
-            <p>Predicted Cutoff: {{ prediction }}</p>
-            {% if eligible %}
-            <p>You are eligible!</p>
-            {% else %}
-            <p>You are not eligible.</p>
-            {% endif %}
-        </div>
-        {% endif %}
+                            {% if college_suggestions %}
+                                <div class="suggestions-container">
+                                    <h3>Other Departments in {{ selected_college }}</h3>
+                                    <div class="table-container">
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>Department</th>
+                                                    <th>Cutoff</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for suggestion in college_suggestions %}
+                                                    <tr class="{% if loop.index is even %}even{% endif %}">
+                                                        <td>{{ suggestion.department }}</td>
+                                                        <td class="cutoff-value">
+                                                            {{ suggestion.values()|last }}
+                                                        </td>
+                                                    </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            {% endif %}
         
-        {% if prediction == "Invalid college" or prediction == "Invalid department" or prediction == "Invalid caste" %}
-        <div class="error">
-            <p>{{ prediction }}</p>
+                            {% if department_suggestions %}
+                                <div class="suggestions-container">
+                                    <h3>Other Colleges for {{ selected_department }}</h3>
+                                    <div class="table-container">
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>College</th>
+                                                    <th>Cutoff</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for suggestion in department_suggestions %}
+                                                    <tr class="{% if loop.index is even %}even{% endif %}">
+                                                        <td>{{ suggestion.college_name }}</td>
+                                                        <td class="cutoff-value">
+                                                            {{ suggestion.values()|last }}
+                                                        </td>
+                                                    </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            {% endif %}
+                            
+                            <!-- NEW: Top Colleges by Cutoff Section -->
+                            {% if top_colleges %}
+                                <div class="suggestions-container">
+                                    <h3>Top Colleges for Your Cutoff</h3>
+                                    <div class="table-container">
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>College</th>
+                                                    <th>Department</th>
+                                                    <th>Cutoff</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for college in top_colleges %}
+                                                    <tr class="{% if loop.index is even %}even{% endif %}">
+                                                        <td>{{ college.college_name }}</td>
+                                                        <td>{{ college.department }}</td>
+                                                        <td class="cutoff-value">
+                                                            {{ college.values()|last }}
+                                                        </td>
+                                                    </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <div id="no-prediction" class="no-prediction">
+                        <div class="illustration">
+                            <img src="{{ url_for('static', filename='images/college.png') }}" alt="College illustration">
+                        </div>
+                        <p>Enter your details to predict your chances of admission and get college recommendations</p>
+                    </div>
+                {% endif %}
+            </div>
         </div>
-        {% endif %}
+        
+        <footer>
+            <p>Data based on historical cutoffs from 2021-2024. Predictions are estimates only.</p>
+        </footer>
     </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('prediction-form');
+            const predictButton = document.getElementById('predict-button');
+            const btnText = document.querySelector('.btn-text');
+            const btnLoading = document.querySelector('.btn-loading');
+        
+            // Add loading animation when form is submitted
+            if (form) {
+                form.addEventListener('submit', function() {
+                    btnText.style.display = 'none';
+                    btnLoading.style.display = 'flex';
+                    predictButton.disabled = true;
+                });
+            }
+        });
+    </script>
 </body>
 </html>
