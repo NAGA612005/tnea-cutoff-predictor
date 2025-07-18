@@ -24,21 +24,11 @@ df['department_code'] = df['department'].astype('category').cat.codes
 # List of cutoff columns to process
 cutoff_columns = ['cutoff_oc', 'cutoff_bc', 'cutoff_mbc', 'cutoff_bcm', 'cutoff_sc', 'cutoff_st', 'cutoff_sca']
 
-# Function to fill missing values using regression for each cutoff column
-def fill_missing_with_regression(df, target_column):
-    features = ['college_name_code', 'department_code']
-    known = df[df[target_column].notnull()]
-    unknown = df[df[target_column].isnull()]
-    
-    if not unknown.empty and not known.empty:
-        reg = Ridge()
-        reg.fit(known[features], known[target_column])
-        predicted_values = reg.predict(unknown[features])
-        df.loc[unknown.index, target_column] = predicted_values
-
-# Apply regression-based filling for all cutoff columns
-for col in cutoff_columns:
-    fill_missing_with_regression(df, col)
+# Fill missing values with 77.5 instead of dropping rows
+df_2021[cutoff_columns] = df_2021[cutoff_columns].fillna(77.5)
+df_2022[cutoff_columns] = df_2022[cutoff_columns].fillna(77.5)
+df_2023[cutoff_columns] = df_2023[cutoff_columns].fillna(77.5)
+df_2024[cutoff_columns] = df_2024[cutoff_columns].fillna(77.5)
 
 # Function to get the cutoff column based on caste
 def get_cutoff_column(caste):
@@ -52,6 +42,17 @@ def get_cutoff_column(caste):
         'sca': 'cutoff_sca'
     }
     return caste_cutoff_map.get(caste.lower())
+
+def round_to_nearest_half_or_whole(num):
+    """Round number to nearest .00 or .50"""
+    base = int(num)
+    decimal = num - base
+    if decimal < 0.25:
+        return float(base)
+    elif decimal < 0.75:
+        return base + 0.50
+    else:
+        return float(base + 1)
 
 # Prediction function (unchanged)
 def predict_cutoff(college, department, caste, your_cutoff):
@@ -84,7 +85,7 @@ def predict_cutoff(college, department, caste, your_cutoff):
         ('model', Ridge(alpha=1.0))
     ])
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.7, random_state=49)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8, random_state=42)
     model_pipeline.fit(X_train, y_train)
 
     college_code = df.loc[df['college_name'] == college, 'college_name_code'].values[0]
@@ -93,6 +94,8 @@ def predict_cutoff(college, department, caste, your_cutoff):
     input_data = pd.DataFrame([[college_code, department_code]], columns=['college_name_code', 'department_code'])
     predicted_cutoff = model_pipeline.predict(input_data)[0]
     predicted_cutoff = max(77, min(predicted_cutoff, 200))
+
+    rounded_predicted_cutoff = round_to_nearest_half_or_whole(predicted_cutoff)
 
     df_filtered = df[df[cutoff_column] <= your_cutoff]
 
@@ -140,14 +143,28 @@ def predict_cutoff(college, department, caste, your_cutoff):
 
 @app.route('/')
 def home():
-    return render_template('index.html')
+    df = pd.read_csv('data/cutoff_cleaned.csv')
+    colleges = df['college_name'].unique().tolist()
+    college_departments = {
+        college: df[df['college_name'] == college]['department'].unique().tolist()
+        for college in colleges
+    }
+    return render_template('index.html', colleges=colleges, college_departments=college_departments)
 
 @app.route('/predict', methods=['POST'])
 def predict():
+    df = pd.read_csv('data/cutoff_cleaned.csv')
+    colleges = df['college_name'].unique().tolist()
+    college_departments = {
+        college: df[df['college_name'] == college]['department'].unique().tolist()
+        for college in colleges
+    }
     college = request.form['college']
     department = request.form['department']
     caste = request.form['caste']
     your_cutoff = float(request.form['your_cutoff'])
+
+    print(college, department, caste, your_cutoff)
 
     predicted_cutoff, college_suggestions, department_suggestions, top_colleges, worth_assessment = predict_cutoff(
         college, department, caste, your_cutoff
@@ -162,6 +179,8 @@ def predict():
         'index.html',
         prediction=f"{round(predicted_cutoff):.2f}",
         your_cutoff=your_cutoff,
+        colleges=colleges,
+        college_departments=college_departments,
         eligible=eligible,
         college_suggestions=college_suggestions,
         department_suggestions=department_suggestions,
@@ -172,4 +191,4 @@ def predict():
     )
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, port=5001)
