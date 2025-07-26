@@ -5,6 +5,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
+from sklearn.linear_model import RidgeCV
 
 app = Flask(__name__)
 
@@ -63,14 +64,15 @@ def predict_cutoff(college, department, caste, your_cutoff):
     y = filtered_df[cutoff_column]
 
     pipeline = Pipeline([
-        ('preprocessor', ColumnTransformer([
-            ('onehot', OneHotEncoder(), ['college_name_code', 'department_code'])
-        ])),
-        ('scaler', StandardScaler(with_mean=False)),
-        ('model', Ridge(alpha=3.0))
-    ])
+    ('preprocessor', ColumnTransformer([
+        ('onehot', OneHotEncoder(), ['college_name_code', 'department_code'])
+    ])),
+    ('scaler', StandardScaler(with_mean=False)),
+    ('model', RidgeCV(alphas=[0.1, 1.0, 3.0, 5.0, 10.0, 50.0], scoring='neg_mean_squared_error', cv=5))
+])
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.7, random_state=42)
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8, random_state=42)
     pipeline.fit(X_train, y_train)
 
     college_code = df[df['college_name'] == college]['college_name_code'].values[0]
