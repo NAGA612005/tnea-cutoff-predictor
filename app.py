@@ -2,184 +2,143 @@ from flask import Flask, request, render_template
 import pandas as pd
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 
 app = Flask(__name__)
 
-# Load data from CSV files (2020-2024)
-df_2021 = pd.read_csv('data/cutoff_2021.csv')
-df_2022 = pd.read_csv('data/cutoff_2022.csv')
-df_2023 = pd.read_csv('data/cutoff_2023.csv')
-df_2024 = pd.read_csv('data/cutoff_cleaned.csv')
+CUTOFF_COLUMNS = ['cutoff_oc', 'cutoff_bc', 'cutoff_mbc', 'cutoff_bcm', 'cutoff_sc', 'cutoff_st', 'cutoff_sca']
+CSV_FILES = ['data/cutoff_cleaned.csv', 'data/cutoff_2022.csv', 'data/cutoff_2021.csv', 'data/cutoff_2023.csv']
 
-# Combine all data into a single DataFrame
-df = pd.concat([df_2024, df_2022, df_2021, df_2023], ignore_index=True)
+def load_and_prepare_data():
+    dfs = []
+    for file in CSV_FILES:
+        df = pd.read_csv(file)
+        df[CUTOFF_COLUMNS] = df[CUTOFF_COLUMNS].fillna(77.5)
+        dfs.append(df)
+    combined_df = pd.concat(dfs, ignore_index=True)
+    combined_df['college_name_code'] = combined_df['college_name'].astype('category').cat.codes
+    combined_df['department_code'] = combined_df['department'].astype('category').cat.codes
+    return combined_df
 
-# Create a mapping for categorical variables
-df['college_name_code'] = df['college_name'].astype('category').cat.codes
-df['department_code'] = df['department'].astype('category').cat.codes
+df = load_and_prepare_data()
 
-# List of cutoff columns to process
-cutoff_columns = ['cutoff_oc', 'cutoff_bc', 'cutoff_mbc', 'cutoff_bcm', 'cutoff_sc', 'cutoff_st', 'cutoff_sca']
+unique_colleges = df['college_name'].unique().tolist()
+college_departments = {
+    college: df[df['college_name'] == college]['department'].unique().tolist()
+    for college in unique_colleges
+}
 
-# Fill missing values with 77.5 instead of dropping rows
-df_2021[cutoff_columns] = df_2021[cutoff_columns].fillna(77.5)
-df_2022[cutoff_columns] = df_2022[cutoff_columns].fillna(77.5)
-df_2023[cutoff_columns] = df_2023[cutoff_columns].fillna(77.5)
-df_2024[cutoff_columns] = df_2024[cutoff_columns].fillna(77.5)
-
-# Function to get the cutoff column based on caste
 def get_cutoff_column(caste):
-    caste_cutoff_map = {
-        'oc': 'cutoff_oc',
-        'bc': 'cutoff_bc',
-        'mbc': 'cutoff_mbc',
-        'bcm': 'cutoff_bcm',
-        'sc': 'cutoff_sc',
-        'st': 'cutoff_st',
-        'sca': 'cutoff_sca'
-    }
-    return caste_cutoff_map.get(caste.lower())
+    return {
+        'oc': 'cutoff_oc', 'bc': 'cutoff_bc', 'mbc': 'cutoff_mbc',
+        'bcm': 'cutoff_bcm', 'sc': 'cutoff_sc', 'st': 'cutoff_st', 'sca': 'cutoff_sca'
+    }.get(caste.lower())
 
 def round_to_nearest_half_or_whole(num):
-    """Round number to nearest .00 or .50"""
     base = int(num)
     decimal = num - base
     if decimal < 0.25:
         return float(base)
     elif decimal < 0.75:
-        return base + 0.50
+        return base + 0.5
     else:
         return float(base + 1)
 
-# Prediction function (unchanged)
+# Prediction Logic
 def predict_cutoff(college, department, caste, your_cutoff):
     cutoff_column = get_cutoff_column(caste)
-    
     if not cutoff_column:
         return "Invalid caste", [], [], [], {}
-    
+
     if college not in df['college_name'].unique():
         return "Invalid college", [], [], [], {}
-    
+
     if department not in df['department'].unique():
         return "Invalid department", [], [], [], {}
 
-    X = df[['college_name_code', 'department_code']]
-    y = df[cutoff_column]
+    filtered_df = df[df[cutoff_column].notna()]
+    X = filtered_df[['college_name_code', 'department_code']]
+    y = filtered_df[cutoff_column]
 
-    valid_indices = y.notna()
-    X = X[valid_indices]
-    y = y[valid_indices]
-
-    preprocessor = ColumnTransformer(
-        transformers=[
+    pipeline = Pipeline([
+        ('preprocessor', ColumnTransformer([
             ('onehot', OneHotEncoder(), ['college_name_code', 'department_code'])
-        ]
-    )
-    model_pipeline = Pipeline(steps=[
-        ('preprocessor', preprocessor),
+        ])),
         ('scaler', StandardScaler(with_mean=False)),
-        ('model', Ridge(alpha=1.0))
+        ('model', Ridge(alpha=3.0))
     ])
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8, random_state=42)
-    model_pipeline.fit(X_train, y_train)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.7, random_state=42)
+    pipeline.fit(X_train, y_train)
 
-    college_code = df.loc[df['college_name'] == college, 'college_name_code'].values[0]
-    department_code = df.loc[df['department'] == department, 'department_code'].values[0]
-
+    college_code = df[df['college_name'] == college]['college_name_code'].values[0]
+    department_code = df[df['department'] == department]['department_code'].values[0]
     input_data = pd.DataFrame([[college_code, department_code]], columns=['college_name_code', 'department_code'])
-    predicted_cutoff = model_pipeline.predict(input_data)[0]
-    predicted_cutoff = max(77, min(predicted_cutoff, 200))
 
-    rounded_predicted_cutoff = round_to_nearest_half_or_whole(predicted_cutoff)
+    predicted = pipeline.predict(input_data)[0]
+    predicted = max(77, min(predicted, 200))
+    rounded_prediction = round_to_nearest_half_or_whole(predicted)
 
     df_filtered = df[df[cutoff_column] <= your_cutoff]
 
-    college_suggestions = df_filtered[df_filtered['college_name'] == college]
-    college_suggestions = college_suggestions.sort_values(by=cutoff_column, ascending=False)
-    college_suggestions = college_suggestions.drop_duplicates(subset=['department'])[
-        ['college_name', 'department', cutoff_column]
-    ].head(5).to_dict('records')
+    college_suggestions = df_filtered[df_filtered['college_name'] == college].sort_values(by=cutoff_column, ascending=False)
+    college_suggestions = college_suggestions.drop_duplicates('department')[['college_name', 'department', cutoff_column]].head(5).to_dict('records')
 
-    department_suggestions = df_filtered[df_filtered['department'] == department]
-    department_suggestions = department_suggestions.sort_values(by=cutoff_column, ascending=False)
-    department_suggestions = department_suggestions.drop_duplicates(subset=['college_name'])[
-        ['college_name', 'department', cutoff_column]
-    ].head(5).to_dict('records')
-    
+    department_suggestions = df_filtered[df_filtered['department'] == department].sort_values(by=cutoff_column, ascending=False)
+    department_suggestions = department_suggestions.drop_duplicates('college_name')[['college_name', 'department', cutoff_column]].head(5).to_dict('records')
+
     top_colleges = df_filtered.sort_values(by=cutoff_column, ascending=False)
-    top_colleges = top_colleges.drop_duplicates(subset=['college_name'])[
-        ['college_name', 'department', cutoff_column]
-    ].head(5).to_dict('records')
-    
-    college_avg_cutoff = df[df['college_name'] == college][cutoff_column].mean()
-    department_avg_cutoff = df[df['department'] == department][cutoff_column].mean()
-    overall_avg_cutoff = df[cutoff_column].mean()
-    
-    worth_assessment = {
-        'college_avg_cutoff': round(college_avg_cutoff, 2),
-        'department_avg_cutoff': round(department_avg_cutoff, 2),
-        'overall_avg_cutoff': round(overall_avg_cutoff, 2),
-        'difference_from_college_avg': round(predicted_cutoff - college_avg_cutoff, 2),
-        'difference_from_department_avg': round(predicted_cutoff - department_avg_cutoff, 2),
-        'difference_from_overall_avg': round(predicted_cutoff - overall_avg_cutoff, 2),
-        'is_worth_it': None
+    top_colleges = top_colleges.drop_duplicates('college_name')[['college_name', 'department', cutoff_column]].head(5).to_dict('records')
+
+    worth = {
+        'college_avg_cutoff': round(df[df['college_name'] == college][cutoff_column].mean(), 2),
+        'department_avg_cutoff': round(df[df['department'] == department][cutoff_column].mean(), 2),
+        'overall_avg_cutoff': round(df[cutoff_column].mean(), 2)
     }
+    worth.update({
+        'difference_from_college_avg': round(predicted - worth['college_avg_cutoff'], 2),
+        'difference_from_department_avg': round(predicted - worth['department_avg_cutoff'], 2),
+        'difference_from_overall_avg': round(predicted - worth['overall_avg_cutoff'], 2)
+    })
 
-    if your_cutoff > predicted_cutoff + 5:
-        worth_assessment['is_worth_it'] = 'high_value'
-    elif your_cutoff >= predicted_cutoff:
-        worth_assessment['is_worth_it'] = 'good_value'
-    elif your_cutoff >= predicted_cutoff - 5:
-        worth_assessment['is_worth_it'] = 'fair_value'
+    if your_cutoff > predicted + 5:
+        worth['is_worth_it'] = 'high_value'
+    elif your_cutoff >= predicted:
+        worth['is_worth_it'] = 'good_value'
+    elif your_cutoff >= predicted - 5:
+        worth['is_worth_it'] = 'fair_value'
     else:
-        worth_assessment['is_worth_it'] = 'low_value'
+        worth['is_worth_it'] = 'low_value'
 
-    return predicted_cutoff, college_suggestions, department_suggestions, top_colleges, worth_assessment
+    return rounded_prediction, college_suggestions, department_suggestions, top_colleges, worth
 
 @app.route('/')
 def home():
-    df = pd.read_csv('data/cutoff_cleaned.csv')
-    colleges = df['college_name'].unique().tolist()
-    college_departments = {
-        college: df[df['college_name'] == college]['department'].unique().tolist()
-        for college in colleges
-    }
-    return render_template('index.html', colleges=colleges, college_departments=college_departments)
+    return render_template('index.html', colleges=unique_colleges, college_departments=college_departments)
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    df = pd.read_csv('data/cutoff_cleaned.csv')
-    colleges = df['college_name'].unique().tolist()
-    college_departments = {
-        college: df[df['college_name'] == college]['department'].unique().tolist()
-        for college in colleges
-    }
     college = request.form['college']
     department = request.form['department']
     caste = request.form['caste']
     your_cutoff = float(request.form['your_cutoff'])
-
-    print(college, department, caste, your_cutoff)
 
     predicted_cutoff, college_suggestions, department_suggestions, top_colleges, worth_assessment = predict_cutoff(
         college, department, caste, your_cutoff
     )
 
     if isinstance(predicted_cutoff, str):
-        return render_template('index.html', prediction=predicted_cutoff)
+        return render_template('index.html', prediction=predicted_cutoff, colleges=unique_colleges, college_departments=college_departments)
 
     eligible = your_cutoff >= predicted_cutoff
 
     return render_template(
         'index.html',
-        prediction=f"{round(predicted_cutoff):.2f}",
+        prediction=f"{predicted_cutoff:.2f}",
         your_cutoff=your_cutoff,
-        colleges=colleges,
+        colleges=unique_colleges,
         college_departments=college_departments,
         eligible=eligible,
         college_suggestions=college_suggestions,
